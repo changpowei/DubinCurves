@@ -33,14 +33,29 @@ namespace DubinsPathsTutorial
         }
 
         
-        private static double Distance(PointF p1, PointF p2)
+        public static double Distance(PointF p1, PointF p2)
         {
             return Math.Sqrt(Math.Pow(p2.X - p1.X, 2) + Math.Pow(p2.Y - p1.Y, 2));
         }
 
+        /// <summary>
+        /// 將角度轉為向量，角度系為 左0 上90 右180 下270
+        /// </summary>
+        /// <param name="angle">弧度</param>
+        /// <param name="distance">距離</param>
+        /// <returns>向量</returns>
+        public static Vector2 GetVector(float radian, float distance)
+        {
+            //計算新座標 r 就是兩者的距離
+            Vector2 vec = new Vector2(x:(float)(distance * Math.Cos(radian)), 
+                                        y:(float)(distance * Math.Sin(radian)));
 
+            return vec;
+        }
+        
+        
         //点到线段距离  
-        private static double pointToLine(Line l1, PointF p1)
+        public static double pointToLine(Line l1, PointF p1)
         {    
             double space = 0;    
             double a, b, c;    
@@ -73,7 +88,7 @@ namespace DubinsPathsTutorial
         /// 判斷點在線的左邊還是右邊，兩點p1(x1,y1),p2(x2,y2),判斷點p(x,y)在線的左邊還是右邊
         /// </summary>
         /// <returns>-1:p在線的左邊; 1:p在線的右邊; 0:p點為(Nan, Nan)</returns>
-        private static int SideOfLine(PointF p, PointF p1, PointF p2)
+        public static int SideOfLine(PointF p, PointF p1, PointF p2)
         {
             if (double.IsNaN(p.X) || double.IsNaN(p.Y)){
                 return 0;
@@ -88,11 +103,43 @@ namespace DubinsPathsTutorial
             }
         }
 
+
+        /// <summary>
+        /// 求直线上的投影点
+        /// </summary>
+        /// <param name="P1">直线上的点1</param>
+        /// <param name="P2">直线上的点2</param>
+        /// <param name="P3">直线外的点</param>
+        /// <returns></returns>
+        public static PointF LinePointProjection(PointF P1,PointF P2,PointF P3)
+        {
+            double a1 = P2.X - P1.X;
+            double b1 = P2.Y - P1.Y;
+            double y1 = P1.Y;
+            double x1 = P1.X;
+            double y2 = P2.Y;
+            double x2 = P2.X;
+            double y3 = P3.Y;
+            double x3 = P3.X;
+            double a1a1 = Math.Pow(a1, 2.0);
+            double b1b1 = Math.Pow(b1, 2.0);
+            double denominator = a1a1 + b1b1;
+            if (denominator == 0) return P3;
+ 
+            double x1y2 = x1 * y2;
+            double x2y1 = x2 * y1;
+            double a1b1 = a1 * b1;
+            double moleculey = b1b1 * y3 + a1b1 * x3 - a1 * x1y2 + a1 * x2y1;
+            double moleculex = a1a1 * x3 + a1b1 * y3 - b1 * x2y1 + b1 * x1y2;
+ 
+            return new PointF((float)(moleculex/denominator),(float)(moleculey/denominator));
+        }
+
         /// <summary>
         /// 給定三個座標點A,B,C，判斷AC向量在AB的左邊或右邊
         /// </summary>
         /// <returns>右邊:-1;左邊:1</returns>
-        private static int SideOfVector(PointF A, PointF B, PointF C)
+        public static int SideOfVector(PointF A, PointF B, PointF C)
         {
             Vector2 ab = new Vector2(B.X - A.X, B.Y - A.Y);
             Vector2 ac = new Vector2(C.X - A.X, C.Y - A.Y);
@@ -139,7 +186,7 @@ namespace DubinsPathsTutorial
         }
 
         // Find the points of intersection.
-        private static int FindLineCircleIntersections(float cx, float cy, float radius, PointF point1, PointF point2, 
+        public static int FindLineCircleIntersections(float cx, float cy, float radius, PointF point1, PointF point2, 
                                                 out PointF intersection1, out PointF intersection2)
         {
             float dx, dy, A, B, C, det, t;
@@ -483,7 +530,7 @@ namespace DubinsPathsTutorial
         /// <param name="l2">線段2</param>  
         /// <param name="war_ship">護衛艦</param>  
         /// <returns>True:銳角;False:鈍角</returns>  
-        private static bool IsAcuteAngle(Line l1, Line l2, Circle war_ship)
+        public static bool IsAcuteAngle(Line l1, Line l2, Circle war_ship)
         {
             PointF intersectpoint = GetIntersection(l1.PointA, l1.PointB, l2.PointA, l2.PointB);
             PointF cutpoint_warship_l1;
@@ -510,7 +557,7 @@ namespace DubinsPathsTutorial
         /// <param name="l2">線段2</param>
         /// <param name="war_ship">護衛艦</param>
         /// <returns>Line l 切線</returns>
-        private static Line NewCutLine(Line l1, Line l2, Circle war_ship)
+        public static Line NewCutLine(Line l1, Line l2, Circle war_ship)
         {   
             // 兩切線交點
             PointF intersectpoint = GetIntersection(l1.PointA, l1.PointB, l2.PointA, l2.PointB);
@@ -531,6 +578,157 @@ namespace DubinsPathsTutorial
 
             return newcutline;
 
+        }
+        
+        public static Circle AllReturnCircle(Vector3 startPos, Vector3 goalPos, OneDubinsPath pathDataList, List<Vector3> DetectedShips)
+        {
+        float return_radius = 7.225f;
+        float threaten_radius = 28.0f;
+
+        //複製所有已觀測到的船艦
+        List<Vector3> ExecuteShips = new List<Vector3>(DetectedShips);
+
+        (Circle firstavoidancecircle, Line firsttangentline) = FirstAvoidanceCircle(startPos, goalPos, pathDataList.tangent1, pathDataList.tangent2, 
+                                                            DetectedShips, return_radius, threaten_radius, pathDataList.pathType.ToString());
+
+        
+        return firstavoidancecircle;
+        
+        }
+
+        public static (Circle, Line) FirstAvoidanceCircle(Vector3 start_center, Vector3 target_center, Vector3 tangent1, Vector3 tangent2, 
+                                                    List<Vector3>DetectedShipsRemaining, float return_radius, float threaten_radius, string DubinType)
+        {
+            // 此狀況出現在，迴轉圓沒有和任何一個護衛艦威脅圓相切於一點時
+            // 此避障狀況為提前觸發，而不是看到護衛艦才觸發
+            if (DetectedShipsRemaining.Count == 0)
+            {
+                PointF firstavoidancecircle = new PointF(x:target_center.X, y:target_center.Z);
+                PointF cutpoint1 = new PointF(tangent1.X, tangent1.Z);
+                PointF cutpoint2 = new PointF(tangent2.X, tangent2.Z);
+                Line cutline = new Line(cutpoint1, cutpoint2);
+
+                return (new Circle(firstavoidancecircle, threaten_radius), cutline);
+            }
+
+            float max_dist = 0.0f;
+            int far_ship_indx = 0;
+
+            PointF t1 = new PointF(tangent1.X, tangent1.Z);
+            PointF t2 = new PointF(tangent2.X, tangent2.Z);
+            for (int i = 0; i < DetectedShipsRemaining.Count; i++)
+            {
+                PointF ship_pos = new PointF(DetectedShipsRemaining[i].X, DetectedShipsRemaining[i].Z);
+
+                PointF intersection1;
+                PointF intersection2;
+
+                int IntersectionNumbers = FindLineCircleIntersections(cx:ship_pos.X,
+                                                                    cy:ship_pos.Y,
+                                                                    radius:threaten_radius,
+                                                                    point1: t1,
+                                                                    point2: t2,
+                                                                    out intersection1,
+                                                                    out intersection2);
+                double t1_t2 = Distance(t1, t2);
+                double int1_t1 = Distance(intersection1, t1);
+                double int1_t2 = Distance(intersection1, t2);
+                double int2_t1 = Distance(intersection2, t1);
+                double int2_t2 = Distance(intersection2, t2);
+
+                bool AvoidNewShip=false;
+                if (Math.Abs(t1_t2 - (int1_t1 + int1_t2))<= 0.00001 && Math.Abs(t1_t2 - (int2_t1 + int2_t2)) <= 0.00001) AvoidNewShip=true;
+
+                if (IntersectionNumbers == 2 && AvoidNewShip)
+                {
+                    float project_dist = (float)pointToLine(l1: new Line(PointA:t1, PointB:t2), p1: ship_pos);
+                    
+                    int ship_side = SideOfVector(A:t1, B:t2, C:ship_pos);
+
+                    char side_char;
+                    if (ship_side == -1) side_char='R';
+                    else side_char='L';
+
+                    if (DubinType[0] != side_char) project_dist = threaten_radius - project_dist;
+                    else project_dist = threaten_radius + project_dist;
+
+                    if (project_dist > max_dist) 
+                    {
+                        max_dist = project_dist;
+                        far_ship_indx = i;
+                    }
+                }
+            }
+
+            // 若有找到更靠近起始迴轉圓的護衛艦
+            if (max_dist > 0.0f)
+            {
+                Vector3 new_target_center = DetectedShipsRemaining[far_ship_indx];
+                
+                Circle new_goal_circle = new Circle(new PointF(x:new_target_center.X, y:new_target_center.Z), threaten_radius);
+                Circle start_circle = new Circle(new PointF(x:start_center.X, y:start_center.Z), return_radius);
+
+                float start_goal_dist = (float)Distance(start_circle.center, new_goal_circle.center);
+                if (Math.Abs(start_goal_dist - (return_radius + threaten_radius)) <= 0.00001)
+                {
+                    PointF cutpoint1 = ClosestIntersection(start_center.X, start_center.Z, return_radius, new_goal_circle.center, start_circle.center);
+
+                    Vector2 start_center_new_goal = Vector2.Normalize(new Vector2(x:new_goal_circle.center.X-start_circle.center.X,
+                                                                                y:new_goal_circle.center.Y-start_circle.center.Y));
+                    Vector2 normal_vec;
+                    if (DubinType[0] == 'L')
+                    {
+                        normal_vec = new Vector2(x:-start_center_new_goal.Y, y:start_center_new_goal.X);
+                    }
+                    else
+                    {
+                        normal_vec = new Vector2(x:start_center_new_goal.Y, y:-start_center_new_goal.X);
+                    }
+                    PointF cutpoint2 = new PointF(x:cutpoint1.X + return_radius * normal_vec.X, 
+                                                y:cutpoint1.Y + return_radius * normal_vec.Y);
+                    
+                    Line cutline = new Line(cutpoint1, cutpoint2);
+                    return (new_goal_circle, cutline);
+                }
+                else
+                {
+                    (Line l1, Line l2) = InnerTagentLines(start_circle, new_goal_circle);
+
+                    int l1_cutpoint_side = SideOfVector(A:t1, B:t2, C:l1.PointB);
+
+                    char cutpoint_side_char;
+                    if (l1_cutpoint_side == -1) cutpoint_side_char='R';
+                    else cutpoint_side_char='L';
+
+                    Vector3 new_tangent1;
+                    Vector3 new_tangent2;
+                    if (DubinType[0] == cutpoint_side_char)
+                    {
+                        new_tangent1 = new Vector3(x:l1.PointA.X, y:0.0f, z:l1.PointA.Y);
+                        new_tangent2 = new Vector3(x:l1.PointB.X, y:0.0f, z:l1.PointB.Y);
+                    }
+                    else
+                    {
+                        new_tangent1 = new Vector3(x:l2.PointA.X, y:0.0f, z:l2.PointA.Y);
+                        new_tangent2 = new Vector3(x:l2.PointB.X, y:0.0f, z:l2.PointB.Y);
+                    }
+                    
+                    DetectedShipsRemaining.RemoveAt(far_ship_indx);
+
+                    return FirstAvoidanceCircle(start_center, new_target_center, new_tangent1, new_tangent2, 
+                                                DetectedShipsRemaining, return_radius, threaten_radius, DubinType);
+
+                }
+
+            }
+            else
+            {
+                PointF firstavoidancecircle = new PointF(x:target_center.X, y:target_center.Z);
+                Line cutline = new Line(t1, t2);
+                return (new Circle(firstavoidancecircle, threaten_radius), cutline);
+
+            }
+            
         }
 
     }
