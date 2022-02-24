@@ -32,6 +32,17 @@ namespace DubinsPathsTutorial
 
         }
 
+        public class AvoidanceTree{
+            public Circle avoid_circle;
+            public Line tangent_line;
+            public List<AvoidanceTree> next_stage;
+
+            public AvoidanceTree(Circle avoid_circle, Line tangent_line, List<AvoidanceTree> next_stage ){
+                this.avoid_circle = avoid_circle;
+                this.tangent_line = tangent_line;
+                this.next_stage = next_stage;
+            }
+        }
         
         public static double Distance(PointF p1, PointF p2)
         {
@@ -580,22 +591,62 @@ namespace DubinsPathsTutorial
 
         }
         
-        public static Circle AllReturnCircle(Vector3 startPos, Vector3 goalPos, OneDubinsPath pathDataList, List<Vector3> DetectedShips)
+        public static AvoidanceTree AllReturnCircle(Vector3 startCenter, Vector3 goalCenter, OneDubinsPath pathDataList, List<Vector3> DetectedShips)
         {
-        float return_radius = 7.225f;
-        float threaten_radius = 28.0f;
+            float return_radius = 7.225f;
+            float threaten_radius = 28.0f;
 
-        //複製所有已觀測到的船艦
-        List<Vector3> ExecuteShips = new List<Vector3>(DetectedShips);
+            //複製所有已觀測到的船艦
+            List<Vector3> ExecuteShips = new List<Vector3>(DetectedShips);
 
-        (Circle firstavoidancecircle, Line firsttangentline) = FirstAvoidanceCircle(startPos, goalPos, pathDataList.tangent1, pathDataList.tangent2, 
-                                                            DetectedShips, return_radius, threaten_radius, pathDataList.pathType.ToString());
+            (Circle first_avoidance_circle, Line first_tangent_line) = FirstAvoidanceCircle(startCenter, goalCenter, pathDataList.tangent1, pathDataList.tangent2, 
+                                                                ExecuteShips, return_radius, threaten_radius, pathDataList.pathType.ToString());
 
-        
-        return firstavoidancecircle;
+            string first_avoid_to_goal_dubin_type = "";
+            switch(pathDataList.pathType.ToString())
+            {
+                case "LSL":
+                    first_avoid_to_goal_dubin_type = "RSL";
+                    break;
+                case "LSR":
+                    first_avoid_to_goal_dubin_type = "RSR";
+                    break;
+                case "RSR":
+                    first_avoid_to_goal_dubin_type = "LSR";
+                    break;
+                case "RSL":
+                    first_avoid_to_goal_dubin_type = "LSL";
+                    break;
+
+                default: 
+                    Console.WriteLine("WTF of the Dubin Type!!!"); 
+                    break; 
+
+            }
+
+            ExecuteShips = new List<Vector3>(DetectedShips);
+            List<AvoidanceTree> avoidance_circles = AvoidanceCircleToFinal(first_avoidance_circle, goalCenter, ExecuteShips, 
+                                                                            return_radius, threaten_radius, first_avoid_to_goal_dubin_type);
+
+            AvoidanceTree all_avoidance_ship = new AvoidanceTree(first_avoidance_circle, first_tangent_line, avoidance_circles);
+            
+            return all_avoidance_ship;
         
         }
 
+        /// <summary>  
+        /// 給定迴轉圓座標、目標圓座標、迴轉圓切點、目標圓切點、偵測到的護衛艦、回轉半徑、威脅半徑、dubin曲線型態
+        /// 尋求以該dubin曲線型態從迴轉圓至目標圓，所要進行避障的第一個護衛艦位置，及迴轉圓至該威脅圓的切線
+        /// </summary>
+        /// <param name="start_center">迴轉圓座標</param>
+        /// <param name="target_center">目標圓座標</param>
+        /// <param name="tangent1">迴轉圓切點</param>
+        /// <param name="tangent2">目標圓切點</param>
+        /// <param name="DetectedShipsRemaining">偵測到的護衛艦</param>
+        /// <param name="return_radius">回轉半徑</param>
+        /// <param name="threaten_radius">威脅半徑</param>
+        /// <param name="DubinType">dubin曲線型態</param>
+        /// <returns>進行避障的第一個護衛艦位置，及迴轉圓至該威脅圓的切線</returns>
         public static (Circle, Line) FirstAvoidanceCircle(Vector3 start_center, Vector3 target_center, Vector3 tangent1, Vector3 tangent2, 
                                                     List<Vector3>DetectedShipsRemaining, float return_radius, float threaten_radius, string DubinType)
         {
@@ -614,6 +665,7 @@ namespace DubinsPathsTutorial
             float max_dist = 0.0f;
             int far_ship_indx = 0;
 
+            // t1、t2為dubin曲線切點的座標
             PointF t1 = new PointF(tangent1.X, tangent1.Z);
             PointF t2 = new PointF(tangent2.X, tangent2.Z);
             for (int i = 0; i < DetectedShipsRemaining.Count; i++)
@@ -623,6 +675,7 @@ namespace DubinsPathsTutorial
                 PointF intersection1;
                 PointF intersection2;
 
+                // 計算當前切線與當前護衛艦威脅圓的交點，若交點數量為2，則兩交點為intersection1、intersection2
                 int IntersectionNumbers = FindLineCircleIntersections(cx:ship_pos.X,
                                                                     cy:ship_pos.Y,
                                                                     radius:threaten_radius,
@@ -630,28 +683,40 @@ namespace DubinsPathsTutorial
                                                                     point2: t2,
                                                                     out intersection1,
                                                                     out intersection2);
+                // 兩切點距離
                 double t1_t2 = Distance(t1, t2);
+                // 交點1到切點1的距離
                 double int1_t1 = Distance(intersection1, t1);
+                // 交點1到切點2的距離
                 double int1_t2 = Distance(intersection1, t2);
+                // 交點2到切點1的距離
                 double int2_t1 = Distance(intersection2, t1);
+                // 交點2到切點2的距離
                 double int2_t2 = Distance(intersection2, t2);
 
+                // 判斷兩交點是否都在切線線段內，若皆在線段內，則該護衛艦則須進行避帳
                 bool AvoidNewShip=false;
                 if (Math.Abs(t1_t2 - (int1_t1 + int1_t2))<= 0.00001 && Math.Abs(t1_t2 - (int2_t1 + int2_t2)) <= 0.00001) AvoidNewShip=true;
 
+                // 若交點數為2且接在切線線段內
                 if (IntersectionNumbers == 2 && AvoidNewShip)
                 {
+                    // 船艦距離線段的投影距離
                     float project_dist = (float)pointToLine(l1: new Line(PointA:t1, PointB:t2), p1: ship_pos);
                     
+                    // 判斷船艦在切線連線的左/右邊
                     int ship_side = SideOfVector(A:t1, B:t2, C:ship_pos);
 
                     char side_char;
                     if (ship_side == -1) side_char='R';
                     else side_char='L';
 
+                    // 若船艦位置與避帳方向相反，則該投影距離要 減 一個威脅半徑
                     if (DubinType[0] != side_char) project_dist = threaten_radius - project_dist;
+                    // 反之，則該投影距離要 加 一個威脅半徑
                     else project_dist = threaten_radius + project_dist;
 
+                    // 若投影距離比當前紀錄的都大，則需要取該護衛艦作為首要避障圓
                     if (project_dist > max_dist) 
                     {
                         max_dist = project_dist;
@@ -660,21 +725,31 @@ namespace DubinsPathsTutorial
                 }
             }
 
-            // 若有找到更靠近起始迴轉圓的護衛艦
+            // 若有求得新的護衛艦進行避障
             if (max_dist > 0.0f)
             {
+                // 該護衛艦位置
                 Vector3 new_target_center = DetectedShipsRemaining[far_ship_indx];
-                
+                // 將該護衛艦座標作為新的目標圓圓心
                 Circle new_goal_circle = new Circle(new PointF(x:new_target_center.X, y:new_target_center.Z), threaten_radius);
+                // 起始迴轉圓圓心
                 Circle start_circle = new Circle(new PointF(x:start_center.X, y:start_center.Z), return_radius);
-
+                // 迴轉圓圓心與護衛艦圓心距離
                 float start_goal_dist = (float)Distance(start_circle.center, new_goal_circle.center);
+                // 若兩距離剛好等於28+7.225，代表兩圓相切，已是最優先進行避障的護衛艦，回傳該護衛艦
                 if (Math.Abs(start_goal_dist - (return_radius + threaten_radius)) <= 0.00001)
                 {
-                    PointF cutpoint1 = ClosestIntersection(start_center.X, start_center.Z, return_radius, new_goal_circle.center, start_circle.center);
+                    // 由於兩圓相切，兩圓內公切線為圓心向量的法向量
+                    // 切點座標為回轉半徑與威脅半徑的比例
+                    float w1 = threaten_radius/(threaten_radius + return_radius);
+                    float w2 = return_radius/(threaten_radius + return_radius);
+                    PointF cutpoint1 = new PointF(x:w1 * start_circle.center.X + w2 * new_goal_circle.center.X,
+                                                y:w1 * start_circle.center.Y + w2 * new_goal_circle.center.Y);
 
+                    // 起始迴轉圓至新目標圓的圓心向量
                     Vector2 start_center_new_goal = Vector2.Normalize(new Vector2(x:new_goal_circle.center.X-start_circle.center.X,
                                                                                 y:new_goal_circle.center.Y-start_circle.center.Y));
+                    // 法向量
                     Vector2 normal_vec;
                     if (DubinType[0] == 'L')
                     {
@@ -684,16 +759,20 @@ namespace DubinsPathsTutorial
                     {
                         normal_vec = new Vector2(x:start_center_new_goal.Y, y:-start_center_new_goal.X);
                     }
+                    // 透過法向量與第一個切點推算第二個切點，作為內公切線的兩點
                     PointF cutpoint2 = new PointF(x:cutpoint1.X + return_radius * normal_vec.X, 
                                                 y:cutpoint1.Y + return_radius * normal_vec.Y);
                     
                     Line cutline = new Line(cutpoint1, cutpoint2);
                     return (new_goal_circle, cutline);
                 }
+                // 若迴轉圓與護衛艦圓心距離大於28+7.225
                 else
                 {
+                    // 則尋求內公切線，會有兩條內公切線
                     (Line l1, Line l2) = InnerTagentLines(start_circle, new_goal_circle);
 
+                    // 尋求第1條內公切線上，威脅圓上的切點，其切點要與避障方向同邊
                     int l1_cutpoint_side = SideOfVector(A:t1, B:t2, C:l1.PointB);
 
                     char cutpoint_side_char;
@@ -702,25 +781,30 @@ namespace DubinsPathsTutorial
 
                     Vector3 new_tangent1;
                     Vector3 new_tangent2;
+                    // 若切點方向與避障方向同邊，則代表該是第一條內公切線 l1
                     if (DubinType[0] == cutpoint_side_char)
                     {
                         new_tangent1 = new Vector3(x:l1.PointA.X, y:0.0f, z:l1.PointA.Y);
                         new_tangent2 = new Vector3(x:l1.PointB.X, y:0.0f, z:l1.PointB.Y);
                     }
+                    // 若切點方向與避障方向反邊，則代表該是第二條內公切線 l2
                     else
                     {
                         new_tangent1 = new Vector3(x:l2.PointA.X, y:0.0f, z:l2.PointA.Y);
                         new_tangent2 = new Vector3(x:l2.PointB.X, y:0.0f, z:l2.PointB.Y);
                     }
                     
+                    // 考慮過得護衛艦即刻刪除
                     DetectedShipsRemaining.RemoveAt(far_ship_indx);
 
+                    // 
                     return FirstAvoidanceCircle(start_center, new_target_center, new_tangent1, new_tangent2, 
                                                 DetectedShipsRemaining, return_radius, threaten_radius, DubinType);
 
                 }
 
             }
+            // 若新護衛艦圓心沒有被更新，則代表該圓就是首要最先避障的護衛艦
             else
             {
                 PointF firstavoidancecircle = new PointF(x:target_center.X, y:target_center.Z);
@@ -730,7 +814,236 @@ namespace DubinsPathsTutorial
             }
             
         }
+        
+        /// <summary>  
+        /// 給定起始圓、目標圓與dubin曲線型態，則返回切線
+        /// </summary>
+        /// <param name="current_circle">起始圓</param>
+        /// <param name="goal_circle">目標圓</param>
+        /// <param name="DubinType">dubin曲線型態</param>
+        /// <returns>切線</returns>
+        public static Line ChooseTangentLine(Circle current_circle, Circle goal_circle, string DubinType)
+        {
+            // 計算護衛艦威脅圓與目標圓的切線
+            Line tangent_line;
+            if(DubinType[0] == DubinType[2])
+            {
+                // 計算外公切線
+                (Line l1, Line l2) = OuterTagentLines(current_circle, goal_circle);
 
+                // 計算l1目標圓切點在圓心向量的左邊或右邊
+                int side = SideOfVector(current_circle.center, goal_circle.center, l1.PointB);
+
+                // RSR 目標圓切點要在圓心向量的左邊
+                if (DubinType[0] == 'R')
+                {
+                    if (side == 1) tangent_line = l1;
+                    else tangent_line = l2; 
+                }
+                // LSL 目標圓切點要在圓心向量的右邊
+                else
+                {
+                    if (side == -1) tangent_line = l1;
+                    else tangent_line = l2;
+                }
+            }
+            else
+            {
+                // 計算內公切線
+                (Line l1, Line l2) = InnerTagentLines(current_circle, goal_circle);
+                
+                // 計算l1目標圓切點在圓心向量的左邊或右邊
+                int side = SideOfVector(current_circle.center, goal_circle.center, l1.PointB);
+
+                // RSL 目標圓切點要在圓心向量的右邊
+                if (DubinType[0] == 'R')
+                {
+                    if (side == -1) tangent_line = l1;
+                    else tangent_line = l2;
+
+                }
+                // LSR 目標圓切點要在圓心向量的左邊
+                else
+                {
+                    if (side == 1) tangent_line = l1;
+                    else tangent_line = l2;
+                }
+            }
+            return tangent_line;
+        }
+
+        
+        /// <summary>  
+        /// 給定當前威脅圓與目標圓等相關參數，返回所有可能路徑的樹狀結構
+        /// 此函式的目標圓座標固定為最終的迴轉圓，而當前威脅原則會一直修正
+        /// </summary>
+        /// <param name="current_circle">當前威脅圓</param>
+        /// <param name="goalCenter">目標圓座標</param>
+        /// <param name="DetectedShipsRemaining">偵測到的護衛艦</param>
+        /// <param name="return_radius">回轉半徑</param>
+        /// <param name="threaten_radius">威脅半徑</param>
+        /// <param name="DubinType">dubin曲線型態</param>
+        /// <returns>所有可能路徑的樹狀結構(威脅圓、切線、下一層路徑)</returns>
+        public static List<AvoidanceTree> AvoidanceCircleToFinal(Circle current_circle, Vector3 goalCenter, List<Vector3>DetectedShipsRemaining,
+                                                        float return_radius, float threaten_radius, string DubinType)                                    
+        {
+            // 把current_circle從DetectedShipsRemaining中刪除
+            for (int i = 0; i <= DetectedShipsRemaining.Count-1; i++)
+            {
+                Circle current_ship = new Circle(new PointF(DetectedShipsRemaining[i].X, DetectedShipsRemaining[i].Z), threaten_radius);
+                if(current_ship.center.Equals(current_circle.center))
+                {
+                    DetectedShipsRemaining.RemoveAt(i);
+                    break;
+                }
+            }
+
+            List<AvoidanceTree> AvoidanceCircles = new List<AvoidanceTree>();
+
+            // 目標圓
+            Circle goal_circle = new Circle(new PointF(goalCenter.X, goalCenter.Z), return_radius);
+
+            // 計算護衛艦威脅圓與目標圓的切線
+            Line tangent_line = ChooseTangentLine(current_circle, goal_circle, DubinType);
+            
+            // 兩切點的距離
+            float tangent_points_dist = (float)Distance(tangent_line.PointA, tangent_line.PointB);
+
+            // 切點航向的單位向量
+            Vector2 tangent_line_vec = Vector2.Normalize(new Vector2(tangent_line.PointB.X-tangent_line.PointA.X, 
+                                                                    tangent_line.PointB.Y-tangent_line.PointA.Y));
+            // 當前威脅圓至目標迴轉圓最近的船艦預設為目標迴轉圓
+            float min_dist = float.MaxValue;
+            Circle nearest_ship = new Circle(goal_circle.center, goal_circle.radius);
+
+            // 所有剩下的護衛艦要一一檢測是否存在於切線線段內
+            for (int i=DetectedShipsRemaining.Count-1; i>=0; i--)
+            {
+                // 護衛艦威脅圓與切線的交點數
+                PointF intersection1;
+                PointF intersection2;
+                int intersection = FindLineCircleIntersections(DetectedShipsRemaining[i].X, DetectedShipsRemaining[i].Z, threaten_radius,
+                                                                tangent_line.PointA, tangent_line.PointB, out intersection1, out intersection2);
+                                                                
+                
+                // PointF ProjectivePoint = LinePointProjection(tangent_line.PointA, tangent_line.PointB, 
+                //                                             new PointF(DetectedShipsRemaining[i].X, DetectedShipsRemaining[i].Z));
+
+                // Vector2 CutPoint1_ProPoint = Vector2.Normalize(new Vector2(ProjectivePoint.X-tangent_line.PointA.X, 
+                //                                                             ProjectivePoint.Y-tangent_line.PointA.Y));
+
+                // float ProPoint_tangent1 = (float)Distance(ProjectivePoint, tangent_line.PointA);
+                // float ProPoint_tangent2 = (float)Distance(ProjectivePoint, tangent_line.PointB);
+
+                // 交點1與切點1的距離
+                float inter1_t1 = (float)Distance(intersection1, tangent_line.PointA);
+                // 交點1與切點2的距離
+                float inter1_t2 = (float)Distance(intersection1, tangent_line.PointB);
+                // 交點1與切點1的距離
+                float inter2_t1 = (float)Distance(intersection2, tangent_line.PointA);
+                // 交點2與切點2的距離
+                float inter2_t2 = (float)Distance(intersection2, tangent_line.PointB);
+
+                bool AvoidNewShip=false;
+                float ProPoint_tangent1 = float.MaxValue;
+
+                // 若兩交點中有其一交點位於切點連線之間，則該護衛艦需要進行避障
+                if (Math.Abs(tangent_points_dist - (inter1_t1 + inter1_t2))<= 0.00001 ||
+                    Math.Abs(tangent_points_dist - (inter2_t1 + inter2_t2))<= 0.00001)
+                    {
+
+                        AvoidNewShip = true;
+                        // 船艦位置於切線線段的投影點
+                        PointF ProjectivePoint = LinePointProjection(tangent_line.PointA, tangent_line.PointB, 
+                                                                new PointF(DetectedShipsRemaining[i].X, DetectedShipsRemaining[i].Z));
+                        
+                        // 威脅圓切點至投影點的向量
+                        Vector2 CutPoint1_ProPoint = Vector2.Normalize(new Vector2(ProjectivePoint.X-tangent_line.PointA.X, 
+                                                                                    ProjectivePoint.Y-tangent_line.PointA.Y));
+
+                        // 投影點至威脅圓切點的距離
+                        ProPoint_tangent1 = (float)Distance(ProjectivePoint, tangent_line.PointA);
+                        
+                        // 投影點距離威脅圓切點的距離，若投影點在切點左側，則距離變負的，要取最小的護衛艦進行避障
+                        if (Vector2.Dot(CutPoint1_ProPoint, tangent_line_vec) < 0) ProPoint_tangent1 = -ProPoint_tangent1;
+                        
+                    }
+
+                if ( intersection == 2 && AvoidNewShip)
+                {
+                    // 要取最小的護衛艦進行避障
+                    if (ProPoint_tangent1 < min_dist)
+                    {
+                        min_dist = ProPoint_tangent1;
+                        nearest_ship = new Circle(new PointF(DetectedShipsRemaining[i].X, DetectedShipsRemaining[i].Z), threaten_radius);
+                    }
+                }
+
+            }
+
+            // 如果最接近的目標圓已經是最終的目標圓，則代表已完成所有避障圓的排序
+            if (nearest_ship.center.Equals(goal_circle.center))
+            {
+                AvoidanceCircles.Add(new AvoidanceTree(nearest_ship, tangent_line, null));
+                return AvoidanceCircles;
+            }
+            // 如果當前威脅圓至目標圓之間有新護衛艦須進行避障
+            else
+            {
+                // 必定存在外公切線
+                string current_dubin_type;
+                // 如果當前的護衛艦至目標圓的dubin曲線是RS(R/L)，則當前護衛艦至新的護衛艦的dubin曲線是RSR
+                if (DubinType[0]=='R') current_dubin_type = "RSR";
+                // 如果當前的護衛艦至目標圓的dubin曲線是LS(R/L)，則當前護衛艦至新的護衛艦的dubin曲線是LSL
+                else current_dubin_type = "LSL";
+
+                // 計算當前護衛艦至新的護衛艦(新的目標圓)的外公切線
+                Line tangent_line_outer = ChooseTangentLine(current_circle, nearest_ship, current_dubin_type);
+
+                // 計算下一階層的避障路徑，dubin曲線會和原本的相同
+                List<AvoidanceTree> next_stage_outer = AvoidanceCircleToFinal(nearest_ship, goalCenter, DetectedShipsRemaining, return_radius, threaten_radius, DubinType);
+
+                // 將新的避障圓、外公切線、下一階層的避帳路徑加入List中
+                AvoidanceCircles.Add(new AvoidanceTree(nearest_ship, tangent_line_outer, next_stage_outer));
+
+
+                // 檢查是否存在內公切線，兩圓距離大於2倍威脅半徑，則存在內公切線
+                float comparison = threaten_radius * 2f;
+                float center_dist = (float)Distance(current_circle.center, nearest_ship.center);
+                if (center_dist > comparison)
+                {
+                    string next_dubin_type;
+                    // 若原本的dubin曲線是RS(R/L)
+                    if (DubinType[0]=='R') 
+                    {
+                        // 當前護衛艦至新的護衛艦(新的目標圓)的dubin曲線是RSL
+                        current_dubin_type = "RSL";
+                        // 新的護衛艦至舊的目標圓的dubin曲線是LS(R/L)
+                        next_dubin_type = "LS" + DubinType[2];
+                    }
+                    // 若原本的dubin曲線是LS(R/L)
+                    else
+                    {
+                        // 當前護衛艦至新的護衛艦(新的目標圓)的dubin曲線是LSR
+                        current_dubin_type = "LSR";
+                        // 新的護衛艦至舊的目標圓的dubin曲線是RS(R/L)
+                        next_dubin_type = "RS" + DubinType[2];
+                    }
+                    // 計算當前護衛艦至新的護衛艦(新的目標圓)的內公切線
+                    Line tangent_line_inner = ChooseTangentLine(current_circle, nearest_ship, current_dubin_type);
+                    // 計算下一階層的避障路徑，dubin曲線為next_dubin_type
+                    List<AvoidanceTree> next_stage_inner = AvoidanceCircleToFinal(nearest_ship, goalCenter, DetectedShipsRemaining, return_radius, threaten_radius, next_dubin_type);
+                    // 將新的避障圓、外公切線、下一階層的避帳路徑加入List中
+                    AvoidanceCircles.Add(new AvoidanceTree(nearest_ship, tangent_line_inner, next_stage_inner));
+
+                }
+
+                return AvoidanceCircles;
+
+            }
+            
+        }
+        
     }
 
 }
