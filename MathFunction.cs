@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Drawing;
 using System.Numerics;
 using System.Collections;
@@ -547,10 +548,10 @@ namespace DubinsPathsTutorial
             PointF cutpoint_warship_l1;
             PointF cutpoint_warship_l2;
             
-            if (Distance(war_ship.center, l1.PointA) == war_ship.radius) cutpoint_warship_l1 = l1.PointA;
+            if (Math.Abs(war_ship.radius - Distance(war_ship.center, l1.PointA)) <= 0.00001) cutpoint_warship_l1 = l1.PointA;
             else cutpoint_warship_l1 = l1.PointB;
             
-            if (Distance(war_ship.center, l2.PointA) == war_ship.radius) cutpoint_warship_l2 = l2.PointA;
+            if (Math.Abs(war_ship.radius - Distance(war_ship.center, l2.PointA)) <= 0.00001) cutpoint_warship_l2 = l2.PointA;
             else cutpoint_warship_l2 = l2.PointB;
             
             double angle = Angle(intersectpoint, cutpoint_warship_l1, cutpoint_warship_l2);
@@ -568,7 +569,7 @@ namespace DubinsPathsTutorial
         /// <param name="l2">線段2</param>
         /// <param name="war_ship">護衛艦</param>
         /// <returns>Line l 切線</returns>
-        public static Line NewCutLine(Line l1, Line l2, Circle war_ship)
+        public static Line NewCutLine(Line l1, Line l2, Circle war_ship, char return_side)
         {   
             // 兩切線交點
             PointF intersectpoint = GetIntersection(l1.PointA, l1.PointB, l2.PointA, l2.PointB);
@@ -576,10 +577,19 @@ namespace DubinsPathsTutorial
             PointF closestpointoncircle = ClosestIntersection(war_ship.center.X , war_ship.center.Y, war_ship.radius, 
                                                                 intersectpoint, war_ship.center);
             
-            // 兩切線交點到護衛艦圓心之單位向量
-            Vector2 bisector_vec = Vector2.Normalize(new Vector2(war_ship.center.X - intersectpoint.X, war_ship.center.Y - intersectpoint.Y));
-            // 兩切線交點到護衛艦圓心之單位向量的左邊法向量
-            Vector2 bisector_normal_vec = new Vector2(-bisector_vec.Y, bisector_vec.X);
+            // 護衛艦圓心到兩切線交點之單位向量
+            Vector2 bisector_vec = Vector2.Normalize(new Vector2(intersectpoint.X - war_ship.center.X, intersectpoint.Y - war_ship.center.Y));
+            
+            // 護衛艦圓心到兩切線交點之單位向量的 左or右 邊法向量
+            Vector2 bisector_normal_vec;
+            if (return_side == 'R')
+            {
+                    bisector_normal_vec = new Vector2(x:bisector_vec.Y, y:-bisector_vec.X);
+            }
+            else
+            {
+                bisector_normal_vec = new Vector2(x:-bisector_vec.Y, y:bisector_vec.X);
+            }
 
             // 法向量的另外一點
             PointF new_point_on_normal = new PointF(closestpointoncircle.X + 10 * bisector_normal_vec.X, 
@@ -591,7 +601,7 @@ namespace DubinsPathsTutorial
 
         }
         
-        public static AvoidanceTree AllReturnCircle(Vector3 startCenter, Vector3 goalCenter, OneDubinsPath pathDataList, List<Vector3> DetectedShips)
+        public static List<List<Tuple<Circle, char>>> AllReturnCircle(Vector3 startCenter, Vector3 goalCenter, OneDubinsPath pathDataList, List<Vector3> DetectedShips)
         {
             float return_radius = 7.225f;
             float threaten_radius = 28.0f;
@@ -629,8 +639,131 @@ namespace DubinsPathsTutorial
                                                                             return_radius, threaten_radius, first_avoid_to_goal_dubin_type);
 
             AvoidanceTree all_avoidance_ship = new AvoidanceTree(first_avoidance_circle, first_tangent_line, avoidance_circles);
-            
-            return all_avoidance_ship;
+
+            List<List<AvoidanceTree>> list_all_paths = new List<List<AvoidanceTree>>();
+            List<List<Tuple<Circle, char>>> list_all_return_circles = new List<List<Tuple<Circle, char>>>();
+
+            foreach(var path in ComputePaths(all_avoidance_ship, n=>n.next_stage))
+            {
+                List<AvoidanceTree> one_path = new List<AvoidanceTree>();
+                List<Circle> avodiance_ship = new List<Circle>();
+                List<Line> tangent_line = new List<Line>();
+                List<Tuple<Circle, char>> all_return_circles = new List<Tuple<Circle, char>>();
+                all_return_circles.Add(new Tuple<Circle, char>(new Circle(new PointF(startCenter.X, startCenter.Z), return_radius), (char)pathDataList.pathType.ToString()[0]));
+
+                foreach(var avoidance_circle in path)
+                {
+                    one_path.Add(avoidance_circle);
+                    avodiance_ship.Add(avoidance_circle.avoid_circle);
+                    tangent_line.Add(avoidance_circle.tangent_line);
+
+                    if (tangent_line.Count >= 2)
+                    {
+                        int i = tangent_line.Count - 2;
+                        while(i < tangent_line.Count - 1)
+                        {
+                            // 兩公切線的交點
+                            PointF intersection = GetIntersection(tangent_line[i].PointA, tangent_line[i].PointB, 
+                                                                    tangent_line[i+1].PointA, tangent_line[i+1].PointB);
+                            // 第一條切線的向量
+                            Vector2 tangent_vec = new Vector2(x:tangent_line[i].PointB.X - tangent_line[i].PointA.X, 
+                                                            y:tangent_line[i].PointB.Y - tangent_line[i].PointA.Y);
+
+                            char return_side;
+                            return_side = (SideOfVector(tangent_line[i].PointA, tangent_line[i].PointB, tangent_line[i+1].PointA) == -1)?'R':'L';
+                            
+                            // 切點至交點的向量
+                            Vector2 cut_point_intersection = new Vector2(x:intersection.X - tangent_line[i].PointA.X,
+                                                                        y:intersection.Y - tangent_line[i].PointA.Y);
+                            // 內積小於0(確切來說應是-1)，代表交點在航向的另一側，要在航向側產生新切線
+                            if (Vector2.Dot(tangent_vec, cut_point_intersection) < 0)
+                            {
+                                PointF intersection1;
+                                PointF intersection2;
+                                int intersections = FindLineCircleIntersections(avodiance_ship[i].center.X, avodiance_ship[i].center.Y, avodiance_ship[i].radius,
+                                                                                 intersection, avodiance_ship[i].center, out intersection1, out intersection2);
+                                
+                                double dist1 = Distance(intersection1, intersection);
+                                double dist2 = Distance(intersection2, intersection);
+                                PointF new_cut_point = (dist1 > dist2)?intersection1:intersection2;
+
+                                // 兩切線交點到護衛艦圓心之單位向量
+                                Vector2 bisector_vec = Vector2.Normalize(new Vector2(avodiance_ship[i].center.X - intersection.X,
+                                                                                    avodiance_ship[i].center.Y - intersection.Y));
+                                // 兩切線交點到護衛艦圓心之單位向量的左邊法向量
+                                Vector2 bisector_normal_vec = new Vector2(-bisector_vec.Y, bisector_vec.X);
+
+                                // 法向量的另外一點
+                                PointF extend_point = new PointF(new_cut_point.X + 10 * bisector_normal_vec.X,
+                                                                new_cut_point.Y + 10 * bisector_normal_vec.Y);
+                                // 新公切線與第一條切線的交點
+                                PointF new_tangent_intersection = GetIntersection(new_cut_point, extend_point, tangent_line[i].PointA, tangent_line[i].PointB);
+                                
+                                // 新公切線與第一條切線的交點 至 切點 的向量
+                                Vector2 new_tangent_intersection_vec = new Vector2(new_cut_point.X - new_tangent_intersection.X,
+                                                                                    new_cut_point.Y - new_tangent_intersection.Y);
+                                
+                                // 新切線的第二的點
+                                PointF second_point_of_new_tanent = new PointF(new_cut_point.X + new_tangent_intersection_vec.X,
+                                                                                new_cut_point.Y + new_tangent_intersection_vec.Y);
+
+                                // 將新的公切線加入list中
+                                tangent_line.Insert(i+1, new Line(new_cut_point, second_point_of_new_tanent));
+
+                                // 將船艦複製
+                                avodiance_ship.Insert(i+1, new Circle(avodiance_ship[i].center, avodiance_ship[i].radius));
+                            }
+                            else if(IsAcuteAngle(tangent_line[i], tangent_line[i+1], avodiance_ship[i]) == true)
+                            {
+                                tangent_line.Insert(i+1, NewCutLine(tangent_line[i], tangent_line[i+1], avodiance_ship[i], return_side));
+                                avodiance_ship.Insert(i+1, new Circle(avodiance_ship[i].center, avodiance_ship[i].radius));
+                            }
+                            else
+                            {
+                                // 交點至護衛艦圓心連線
+                                Line intersect_warship = new Line(intersection, avodiance_ship[i].center);
+                                
+                                PointF base_point;
+                                if (all_return_circles[all_return_circles.Count-1].Item2 != return_side)
+                                {
+                                    Vector2 normal_vec;
+                                    if (return_side == 'R')
+                                    {
+                                         normal_vec = Vector2.Normalize(new Vector2(x:tangent_vec.Y, y:-tangent_vec.X));
+                                    }
+                                    else
+                                    {
+                                        normal_vec = Vector2.Normalize(new Vector2(x:-tangent_vec.Y, y:tangent_vec.X));
+                                    }
+                                    base_point = new PointF(all_return_circles[all_return_circles.Count-1].Item1.center.X + 2 * return_radius * normal_vec.X,
+                                                            all_return_circles[all_return_circles.Count-1].Item1.center.Y + 2 * return_radius * normal_vec.Y);
+                                }
+                                else
+                                {
+                                    base_point = all_return_circles[all_return_circles.Count-1].Item1.center;
+                                }
+                                PointF extend_point = new PointF(base_point.X + 10 * tangent_vec.X,
+                                                                base_point.Y + 10 * tangent_vec.Y);
+
+                                Line preious_center_extension = new Line(base_point, extend_point);
+
+                                // 切兩公切線的迴轉圓圓心
+                                PointF return_center = GetIntersection(intersect_warship.PointA, intersect_warship.PointB, 
+                                                                        preious_center_extension.PointA, preious_center_extension.PointB);
+
+                                all_return_circles.Add(new Tuple<Circle, char>(new Circle(return_center, return_radius), return_side));
+                                i += 1;
+                                
+                            }                            
+                        }
+                    }
+                }
+                all_return_circles.Add(new Tuple<Circle, char>(new Circle(new PointF(goalCenter.X, goalCenter.Z), return_radius), (char)pathDataList.pathType.ToString()[2]));
+                list_all_paths.Add(one_path);
+                list_all_return_circles.Add(all_return_circles);
+            }
+
+            return list_all_return_circles;
         
         }
 
@@ -849,24 +982,60 @@ namespace DubinsPathsTutorial
             }
             else
             {
-                // 計算內公切線
-                (Line l1, Line l2) = InnerTagentLines(current_circle, goal_circle);
-                
-                // 計算l1目標圓切點在圓心向量的左邊或右邊
-                int side = SideOfVector(current_circle.center, goal_circle.center, l1.PointB);
-
-                // RSL 目標圓切點要在圓心向量的右邊
-                if (DubinType[0] == 'R')
+                // 護衛艦威脅圓圓心與目標圓圓心距離
+                float current_goal_dist = (float)Distance(current_circle.center, goal_circle.center);
+                // 若兩距離剛好等於28+7.225，代表威脅圓圓心與目標圓圓心兩圓相切，已完成所有避障圓的排序
+                if (Math.Abs(current_goal_dist - (current_circle.radius + goal_circle.radius)) <= 0.00001)
                 {
-                    if (side == -1) tangent_line = l1;
-                    else tangent_line = l2;
+                    // 由於兩圓相切，兩圓內公切線為圓心向量的法向量
+                    // 切點座標為回轉半徑與威脅半徑的比例
+                    float w1 = current_circle.radius/(current_circle.radius + goal_circle.radius);
+                    float w2 = goal_circle.radius/(current_circle.radius + goal_circle.radius);
+                    PointF cutpoint1 = new PointF(x:w1 * goal_circle.center.X + w2 * current_circle.center.X,
+                                                y:w1 * goal_circle.center.Y + w2 * current_circle.center.Y);
 
+                    // 護衛艦威脅圓至目標圓的圓心向量
+                    Vector2 current_center_goal_center = Vector2.Normalize(new Vector2(x:goal_circle.center.X-current_circle.center.X,
+                                                                                y:goal_circle.center.Y-current_circle.center.Y));
+                    // 法向量
+                    Vector2 normal_vec;
+                    if (DubinType[0] == 'L')
+                    {
+                        normal_vec = new Vector2(x:-current_center_goal_center.Y, y:current_center_goal_center.X);
+                    }
+                    else
+                    {
+                        normal_vec = new Vector2(x:current_center_goal_center.Y, y:-current_center_goal_center.X);
+                    }
+                    // 透過法向量與第一個切點推算第二個切點，作為內公切線的兩點
+                    PointF cutpoint2 = new PointF(x:cutpoint1.X + goal_circle.radius * normal_vec.X, 
+                                                y:cutpoint1.Y + goal_circle.radius * normal_vec.Y);
+                    
+                    tangent_line = new Line(cutpoint1, cutpoint2);
+                    
                 }
-                // LSR 目標圓切點要在圓心向量的左邊
                 else
                 {
-                    if (side == 1) tangent_line = l1;
-                    else tangent_line = l2;
+                    // 計算內公切線
+                    (Line l1, Line l2) = InnerTagentLines(current_circle, goal_circle);
+                    
+                    // 計算l1目標圓切點在圓心向量的左邊或右邊
+                    int side = SideOfVector(current_circle.center, goal_circle.center, l1.PointB);
+
+                    // RSL 目標圓切點要在圓心向量的右邊
+                    if (DubinType[0] == 'R')
+                    {
+                        if (side == -1) tangent_line = l1;
+                        else tangent_line = l2;
+
+                    }
+                    // LSR 目標圓切點要在圓心向量的左邊
+                    else
+                    {
+                        if (side == 1) tangent_line = l1;
+                        else tangent_line = l2;
+                    }
+
                 }
             }
             return tangent_line;
@@ -1043,7 +1212,27 @@ namespace DubinsPathsTutorial
             }
             
         }
-        
+
+
+        public static IEnumerable<IEnumerable<T>> ComputePaths<T>(T Root, Func<T, IEnumerable<T>> Children)
+        {
+            var next_stages = Children(Root);
+            if (next_stages != null && next_stages.Any())
+            {
+                foreach (var one_path in next_stages)
+                {
+                    foreach (var next_next_stage in ComputePaths(one_path, Children))
+                    {
+                        yield return new[] {Root}.Concat(next_next_stage);
+                    }
+                }
+            }
+            else
+            {
+                yield return new[] {Root};
+            }
+        }
+
     }
 
 }

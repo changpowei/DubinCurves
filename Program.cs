@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Drawing;
 using System.Numerics;
 using System.Collections;
@@ -12,30 +13,41 @@ namespace DubinsPathsTutorial
         {
             
             //To generate paths we need the position and rotation (heading) of the cars
-            Vector3 startPos = new Vector3(x:-4.0230647277645f, y:0.0f, z:-46.7737022073374f);
+            Vector3 startPos = new Vector3(x:4.3175286618571f, y:0.0f, z:-41.1824537418076f);
             Vector3 goalPos = new Vector3(x:57.8838464940728f, y:0.0f, z:5.1088464940728f);
 
-            Vector3 sideReturnPos = new Vector3(x:52.775f, y:0.0f, z:0.0f);
+            Vector3 leftsideReturnPos = new Vector3(x:52.775f, y:0.0f, z:0.0f);
+            Vector3 rightsideReturnPos = new Vector3(x:62.9926929881455f, y:0.0f, z:10.2176929881455f);
             List<(PointF center, PointF cutpoint, char direction)> NewgoalPos = new List<(PointF center, PointF cutpoint, char direction)>();
-            NewgoalPos.Add((new PointF(sideReturnPos.X, sideReturnPos.Z), 
+            NewgoalPos.Add((new PointF(leftsideReturnPos.X, leftsideReturnPos.Z), 
                             new PointF(goalPos.X, goalPos.Z),
                              'L'));
+            NewgoalPos.Add((new PointF(rightsideReturnPos.X, rightsideReturnPos.Z), 
+                            new PointF(goalPos.X, goalPos.Z),
+                             'R'));
 
             List<Vector3> DetectedShips = new List<Vector3>();
-            DetectedShips.Add(new Vector3(x:17.094957017677f, y:0.0f, z:-7.6777261702978f));
-            DetectedShips.Add(new Vector3(x:15.4160004754832f, y:0.0f, z:-26.62121494609f));
-            DetectedShips.Add(new Vector3(x:72.3815707560877f, y:0.0f, z:-30.8055751609168f));
+            DetectedShips.Add(new Vector3(x:24.7106555175762f, y:0.0f, z:-21.9959903614306f));
+            DetectedShips.Add(new Vector3(x:82.7536255633538f, y:0.0f, z:-22.1092239774434f));
+            // DetectedShips.Add(new Vector3(x:72.3815707560877f, y:0.0f, z:-30.8055751609168f));
             
             //Heading is in radians(弧度)
             float startHeading = (180f-123.8365476383409f) * (MathF.PI * 2) / 360;
             float goalHeading = -45 * (MathF.PI * 2) / 360;
 
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
+
             // 回傳新的左右迴轉圓，資料結構為(圓心、切點、迴轉方向)，[0]為左迴轉、[1]為右回轉
             List<(PointF center, PointF cutpoint, char direction)> NewstartPos = NewStartPos(startPos, startHeading, DetectedShips);
 
-            OneDubinsPath dubin_path_1 = FinalDubinPath(NewstartPos[0], NewgoalPos[0], sideReturnPos, DetectedShips, startHeading, goalHeading);
-
-            Console.WriteLine("Hello World!");
+            List<List<Tuple<MathFunction.Circle, char>>> right_left = FinalDubinPath(NewstartPos[1], NewgoalPos[0], leftsideReturnPos, DetectedShips, startHeading, goalHeading);
+            List<List<Tuple<MathFunction.Circle, char>>> left_left = FinalDubinPath(NewstartPos[0], NewgoalPos[0], leftsideReturnPos, DetectedShips, startHeading, goalHeading);
+            List<List<Tuple<MathFunction.Circle, char>>> right_right = FinalDubinPath(NewstartPos[1], NewgoalPos[1], rightsideReturnPos, DetectedShips, startHeading, goalHeading);
+            List<List<Tuple<MathFunction.Circle, char>>> left_right = FinalDubinPath(NewstartPos[0], NewgoalPos[1], rightsideReturnPos, DetectedShips, startHeading, goalHeading);
+            sw.Stop();
+            TimeSpan ts2 = sw.Elapsed;  
+            Console.WriteLine("Stopwatch總共花費{0}ms.", ts2.TotalMilliseconds);  
         }
 
         public static List<(PointF , PointF , char)> NewStartPos(Vector3 startPos, float startHeading, List<Vector3> DetectedShips)
@@ -208,7 +220,7 @@ namespace DubinsPathsTutorial
             return pathData;
         }
 
-        public static OneDubinsPath FinalDubinPath((PointF, PointF, char) NewstartPos, (PointF, PointF, char) NewgoalPos, Vector3 sideReturnPos, 
+        public static List<List<Tuple<MathFunction.Circle, char>>> FinalDubinPath((PointF, PointF, char) NewstartPos, (PointF, PointF, char) NewgoalPos, Vector3 sideReturnPos, 
                                                 List<Vector3> DetectedShips, float startHeading, float goalHeading)
         {
             
@@ -292,10 +304,10 @@ namespace DubinsPathsTutorial
                 }
             }
 
-            MathFunction.AvoidanceTree all_avoidance_ship = MathFunction.AllReturnCircle(startcenter, goalcenter, pathDataList[0], DetectedShips);
+            List<List<Tuple<MathFunction.Circle, char>>> list_all_return_circles = MathFunction.AllReturnCircle(startcenter, goalcenter, pathDataList[0], DetectedShips);
 
 
-            return pathDataList[0];
+            return list_all_return_circles;
             
         }
 
