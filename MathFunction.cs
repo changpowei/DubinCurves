@@ -634,21 +634,30 @@ namespace DubinsPathsTutorial
 
             }
 
+            // 尋求第一個威脅圓到最終目標圓的所有路徑，以AvoidanceTree樹狀結構儲存
             ExecuteShips = new List<Vector3>(DetectedShips);
             List<AvoidanceTree> avoidance_circles = AvoidanceCircleToFinal(first_avoidance_circle, goalCenter, ExecuteShips, 
                                                                             return_radius, threaten_radius, first_avoid_to_goal_dubin_type);
-
+            // 將第一個威脅圓與該切線，以及第一個威脅圓之後的樹狀路徑，整合成一個完整結構
             AvoidanceTree all_avoidance_ship = new AvoidanceTree(first_avoidance_circle, first_tangent_line, avoidance_circles);
 
+            // 將樹狀結構拆解成各個完整路徑
             List<List<AvoidanceTree>> list_all_paths = new List<List<AvoidanceTree>>();
+            // 透過公切線計算迴轉圓
             List<List<Tuple<Circle, char>>> list_all_return_circles = new List<List<Tuple<Circle, char>>>();
 
+            // 透過ComputePaths輸出完整避障順序
             foreach(var path in ComputePaths(all_avoidance_ship, n=>n.next_stage))
             {
+                // 儲存完整威脅圓順序
                 List<AvoidanceTree> one_path = new List<AvoidanceTree>();
+                // 威脅圓圓心座標
                 List<Circle> avodiance_ship = new List<Circle>();
+                // 切線，點A為當前威脅圓切點，點B為下一個威脅圓切點
                 List<Line> tangent_line = new List<Line>();
+                // 透過公切線計算迴轉圓及該圓旋轉方向
                 List<Tuple<Circle, char>> all_return_circles = new List<Tuple<Circle, char>>();
+                // 第一個迴轉圓為先前進行推算，不與任一威脅圓相割的圓
                 all_return_circles.Add(new Tuple<Circle, char>(new Circle(new PointF(startCenter.X, startCenter.Z), return_radius), (char)pathDataList.pathType.ToString()[0]));
 
                 foreach(var avoidance_circle in path)
@@ -657,8 +666,10 @@ namespace DubinsPathsTutorial
                     avodiance_ship.Add(avoidance_circle.avoid_circle);
                     tangent_line.Add(avoidance_circle.tangent_line);
 
+                    // 若存入公切線的數量大於2，代表要開始計算迴轉圓
                     if (tangent_line.Count >= 2)
                     {
+                        // 從倒數第二個圓與最後一個圓開始計算
                         int i = tangent_line.Count - 2;
                         while(i < tangent_line.Count - 1)
                         {
@@ -713,6 +724,7 @@ namespace DubinsPathsTutorial
                                 // 將船艦複製
                                 avodiance_ship.Insert(i+1, new Circle(avodiance_ship[i].center, avodiance_ship[i].radius));
                             }
+                            // 若夾角為銳角，也需要重新產生公切線
                             else if(IsAcuteAngle(tangent_line[i], tangent_line[i+1], avodiance_ship[i]) == true)
                             {
                                 tangent_line.Insert(i+1, NewCutLine(tangent_line[i], tangent_line[i+1], avodiance_ship[i], return_side));
@@ -720,12 +732,14 @@ namespace DubinsPathsTutorial
                             }
                             else
                             {
-                                // 交點至護衛艦圓心連線
+                                // 切線交點至護衛艦圓心連線
                                 Line intersect_warship = new Line(intersection, avodiance_ship[i].center);
-                                
+                                // 產生一個基準點
                                 PointF base_point;
+                                // 若前一個迴轉方向與當前的迴轉方向相反，代表使用內公切線
                                 if (all_return_circles[all_return_circles.Count-1].Item2 != return_side)
                                 {
+                                    // 計算法向量
                                     Vector2 normal_vec;
                                     if (return_side == 'R')
                                     {
@@ -735,16 +749,19 @@ namespace DubinsPathsTutorial
                                     {
                                         normal_vec = Vector2.Normalize(new Vector2(x:-tangent_vec.Y, y:tangent_vec.X));
                                     }
+                                    // 基點為前一個迴轉圓圓心加上兩倍回轉半徑的法向量
                                     base_point = new PointF(all_return_circles[all_return_circles.Count-1].Item1.center.X + 2 * return_radius * normal_vec.X,
                                                             all_return_circles[all_return_circles.Count-1].Item1.center.Y + 2 * return_radius * normal_vec.Y);
                                 }
+                                // 若前一個迴轉方向與當前相同，代表是外公切線，基點就是上一個迴轉圓
                                 else
                                 {
                                     base_point = all_return_circles[all_return_circles.Count-1].Item1.center;
                                 }
+                                // 延伸點為從基點延切線方向延伸的另一點
                                 PointF extend_point = new PointF(base_point.X + 10 * tangent_vec.X,
                                                                 base_point.Y + 10 * tangent_vec.Y);
-
+                                // 透過基點與延伸點組成另一條線
                                 Line preious_center_extension = new Line(base_point, extend_point);
 
                                 // 切兩公切線的迴轉圓圓心
