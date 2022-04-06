@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Diagnostics;
 using System.Drawing;
 using System.Numerics;
@@ -14,32 +15,50 @@ namespace DubinsPathsTutorial
             
             //To generate paths we need the position and rotation (heading) of the cars
             // 飛彈當前位置
-            Vector3 startPos = new Vector3(x:53.0216592737006f, y:0.0f, z:9.971033714445f);
+            // Vector3 startPos = new Vector3(x:4.3175286618571f, y:0.0f, z:-41.1824537418076f);
+            Vector3 startPos = new Vector3(x:11.4794318215552f, y:0.0f, z:-36.3813588818469f);
+            
             // 最終菱形搜索座標
-            Vector3 goalPos = new Vector3(x:-5.1088464940728f, y:0.0f, z:57.88384649940728f);
-            // 最終目標座標的左迴轉圓座標
-            Vector3 leftsideReturnPos = new Vector3(x:0.0f, y:0.0f, z:52.775f);
-            // 最終目標座標的右迴轉圓座標
-            Vector3 rightsideReturnPos = new Vector3(x:-10.2176929881456f, y:0.0f, z:62.9926929881456f);
-            List<(PointF center, PointF cutpoint, char direction)> NewgoalPos = new List<(PointF center, PointF cutpoint, char direction)>();
-            NewgoalPos.Add((new PointF(leftsideReturnPos.X, leftsideReturnPos.Z), 
-                            new PointF(goalPos.X, goalPos.Z),
-                             'L'));
-            NewgoalPos.Add((new PointF(rightsideReturnPos.X, rightsideReturnPos.Z), 
-                            new PointF(goalPos.X, goalPos.Z),
-                             'R'));
+            // Vector3 goalPos = new Vector3(x:57.8838464940728f, y:0.0f, z:5.1088464940728f);
+            // // 最終目標座標的左迴轉圓座標
+            // Vector3 leftsideReturnPos = new Vector3(x:52.775f, y:0.0f, z:0.0f);
+            // // 最終目標座標的右迴轉圓座標
+            // Vector3 rightsideReturnPos = new Vector3(x:62.9926929881456f, y:0.0f, z:10.2176929881456f);
+            // List<(PointF center, PointF cutpoint, char direction)> NewgoalPos = new List<(PointF center, PointF cutpoint, char direction)>();
+            // NewgoalPos.Add((new PointF(leftsideReturnPos.X, leftsideReturnPos.Z), 
+            //                 new PointF(goalPos.X, goalPos.Z),
+            //                  'L'));
+            // NewgoalPos.Add((new PointF(rightsideReturnPos.X, rightsideReturnPos.Z), 
+            //                 new PointF(goalPos.X, goalPos.Z),
+            //                  'R'));
 
             // 偵查到的護衛艦座標
             List<Vector3> DetectedShips = new List<Vector3>();
-            DetectedShips.Add(new Vector3(x:29.6229855761661f, y:0.0f, z:25.3496574889024f));
-            // DetectedShips.Add(new Vector3(x:23.0008833484754f, y:0.0f, z:-23.1421631299995f));
-            // DetectedShips.Add(new Vector3(x:72.3815707560877f, y:0.0f, z:-30.8055751609168f));
+            // DetectedShips.Add(new Vector3(x:29.6229855761661f, y:0.0f, z:25.3496574889024f));
+            // DetectedShips.Add(new Vector3(x:24.7106555175762f, y:0.0f, z:-21.9959903614306f));
+            // DetectedShips.Add(new Vector3(x:82.7536255633538f, y:0.0f, z:-22.1092239774434f));
+            // DetectedShips.Add(new Vector3(x:12.2624794863495f, y:0.0f, z:-0.1448869746944f));
+            DetectedShips.Add(new Vector3(x:36.6852542347757f, y:0.0f, z:-24.1884709354582f));
+            DetectedShips.Add(new Vector3(x:43.8774553733246f, y:0.0f, z:35.3865301042543f));
+            DetectedShips.Add(new Vector3(x:2.6140094121851f, y:0.0f, z:22.087907537454f));
             
             // 飛彈當前飛行角度 上(0度)、右(90度)、左(-90度)、下(+-180度)，轉弧度
-            // float startHeading = (180f-123.8365476383409f) * (MathF.PI * 2) / 360;
-            float startHeading = -45 * (MathF.PI * 2) / 360;
+            float startHeading = (180f-123.8365476383409f) * (MathF.PI * 2) / 360;
+            // float startHeading = -45 * (MathF.PI * 2) / 360;
             // 目標的航行角度 上(0度)、右(90度)、左(-90度)、下(+-180度)，轉弧度
-            float goalHeading = -135 * (MathF.PI * 2) / 360;
+            float goalHeading = -45 * (MathF.PI * 2) / 360;
+            // float goalHeading = -135 * (MathF.PI * 2) / 360;
+
+            List<Tuple<Vector3, char>> InitialDiamondCircle = new List<Tuple<Vector3, char>>();
+            // InitialDiamondCircle.Add(new Tuple<Vector3, char>(new Vector3(x:0.0f, y:0.0f, z:-52.775f), 'R'));
+            InitialDiamondCircle.Add(new Tuple<Vector3, char>(new Vector3(x:52.775f, y:0.0f, z:0.0f), 'L'));
+            InitialDiamondCircle.Add(new Tuple<Vector3, char>(new Vector3(x:0.0f, y:0.0f, z:52.772f), 'L'));
+            InitialDiamondCircle.Add(new Tuple<Vector3, char>(new Vector3(x:-52.775f, y:0.0f, z:0.0f), 'L'));
+            InitialDiamondCircle.Add(new Tuple<Vector3, char>(new Vector3(x:0.0f, y:0.0f, z:-52.775f), 'L'));
+            InitialDiamondCircle.Add(new Tuple<Vector3, char>(new Vector3(x:-7.225f, y:0.0f, z:0.0f), 'L'));
+            
+            List<(PointF center, PointF cutpoint, char direction)> NewgoalPos = GetNewTarget.NewGoalPos(InitialDiamondCircle, DetectedShips);
+
 
             Stopwatch sw = new Stopwatch();
             sw.Start();
@@ -47,13 +66,37 @@ namespace DubinsPathsTutorial
             // 回傳新的左右迴轉圓，資料結構為(圓心、切點、迴轉方向)，[0]為左迴轉、[1]為右回轉
             List<(PointF center, PointF cutpoint, char direction)> NewstartPos = NewStartPos(startPos, startHeading, DetectedShips);
 
-            (List<List<Tuple<MathFunction.Circle, char>>> right_left, List<float> RL_dist) = FinalDubinPath(NewstartPos[1], NewgoalPos[0], leftsideReturnPos, DetectedShips, startHeading, goalHeading);
-            (List<List<Tuple<MathFunction.Circle, char>>> left_left, List<float> LL_dist)  = FinalDubinPath(NewstartPos[0], NewgoalPos[0], leftsideReturnPos, DetectedShips, startHeading, goalHeading);
-            (List<List<Tuple<MathFunction.Circle, char>>> right_right, List<float> RR_dist)  = FinalDubinPath(NewstartPos[1], NewgoalPos[1], rightsideReturnPos, DetectedShips, startHeading, goalHeading);
-            (List<List<Tuple<MathFunction.Circle, char>>> left_right, List<float> LR_dist)  = FinalDubinPath(NewstartPos[0], NewgoalPos[1], rightsideReturnPos, DetectedShips, startHeading, goalHeading);
+            (List<List<Tuple<MathFunction.Circle, char>>> right_left, List<float> RL_dist) = FinalDubinPath(NewstartPos[1], NewgoalPos[0], DetectedShips, startHeading, goalHeading);
+            (List<List<Tuple<MathFunction.Circle, char>>> left_left, List<float> LL_dist)  = FinalDubinPath(NewstartPos[0], NewgoalPos[0], DetectedShips, startHeading, goalHeading);
+            (List<List<Tuple<MathFunction.Circle, char>>> right_right, List<float> RR_dist)  = FinalDubinPath(NewstartPos[1], NewgoalPos[1], DetectedShips, startHeading, goalHeading);
+            (List<List<Tuple<MathFunction.Circle, char>>> left_right, List<float> LR_dist)  = FinalDubinPath(NewstartPos[0], NewgoalPos[1], DetectedShips, startHeading, goalHeading);
+            
+            //將所有路徑結果與距離依序串接
+            List<List<Tuple<MathFunction.Circle, char>>> all_avoidance_path = new List<List<Tuple<MathFunction.Circle, char>>>();
+            List<float> all_dist_of_paths = new List<float>();
+            all_avoidance_path.AddRange(right_left);
+            all_dist_of_paths.AddRange(RL_dist);
+
+            all_avoidance_path.AddRange(left_left);
+            all_dist_of_paths.AddRange(LL_dist);
+
+            all_avoidance_path.AddRange(right_right);
+            all_dist_of_paths.AddRange(RR_dist);
+
+            all_avoidance_path.AddRange(left_right);
+            all_dist_of_paths.AddRange(LR_dist);
+
+            // 尋求最短路徑的索引值，以利取得對應路徑
+            List<Tuple<MathFunction.Circle, char>> final_path = all_avoidance_path[all_dist_of_paths.IndexOf(all_dist_of_paths.Min())];
+
             sw.Stop();
             TimeSpan ts2 = sw.Elapsed;  
-            Console.WriteLine("Stopwatch總共花費{0}ms.", ts2.TotalMilliseconds);  
+            Console.WriteLine("總共花費{0}ms. \r\n", ts2.TotalMilliseconds);  
+            
+            for(int i = 0; i < final_path.Count(); i++)
+            {
+                Console.WriteLine($"避障圓{i}, 轉向 = {final_path[i].Item2}, 圓心 = {final_path[i].Item1.center}\r");
+            }
         }
 
         public static List<(PointF , PointF , char)> NewStartPos(Vector3 startPos, float startHeading, List<Vector3> DetectedShips)
@@ -226,7 +269,17 @@ namespace DubinsPathsTutorial
             return pathData;
         }
 
-        public static (List<List<Tuple<MathFunction.Circle, char>>>, List<float>) FinalDubinPath((PointF, PointF, char) NewstartPos, (PointF, PointF, char) NewgoalPos, Vector3 sideReturnPos, 
+        /// <summary>  
+        /// 給定新起始迴轉圓、新目標圓、飛彈當前航向、飛彈目標最終航向，以及當前偵測到的所有護衛艦位置資訊，
+        /// 尋求所有路徑的的迴轉圓與迴轉方向，及其對應的圓心連線總距離
+        /// </summary>
+        /// <param name="NewstartPos">新起始迴轉圓，資料結構為(圓心、切點、迴轉方向)，[0]為左迴轉、[1]為右回轉</param>
+        /// <param name="NewgoalPos">新目標圓，資料結構為(圓心、切點、迴轉方向)，[0]為左迴轉、[1]為右回轉</param>
+        /// <param name="DetectedShips">偵測到的護衛艦</param>
+        /// <param name="startHeading">飛彈當前航向</param>
+        /// <param name="goalHeading">飛彈目標最終航向</param>
+        /// <returns>最短路徑的所有迴轉圓與迴轉方向</returns>
+        public static (List<List<Tuple<MathFunction.Circle, char>>>, List<float>) FinalDubinPath((PointF, PointF, char) NewstartPos, (PointF, PointF, char) NewgoalPos,
                                                 List<Vector3> DetectedShips, float startHeading, float goalHeading)
         {
             

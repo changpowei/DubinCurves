@@ -601,6 +601,15 @@ namespace DubinsPathsTutorial
 
         }
         
+        /// <summary>  
+        /// 給定起始迴轉圓座標、目標轉折圓座標、dubin curve相關資訊，以及當前偵測到的所有護衛艦位置資訊，
+        /// 尋求從起始迴轉圓至目標轉折圓中所有路徑，其迴轉圓圓心與迴轉方向
+        /// </summary>
+        /// <param name="startCenter">迴轉圓座標</param>
+        /// <param name="goalCenter">目標圓座標</param>
+        /// <param name="pathDataList">Dubin path曲線型態與切點等其他資訊</param>
+        /// <param name="DetectedShips">偵測到的護衛艦</param>
+        /// <returns>尋求從起始迴轉圓至目標轉折圓中所有路徑，其迴轉圓圓心與迴轉方向</returns>
         public static List<List<Tuple<Circle, char>>> AllReturnCircle(Vector3 startCenter, Vector3 goalCenter, OneDubinsPath pathDataList, List<Vector3> DetectedShips)
         {
             float return_radius = 7.225f;
@@ -612,6 +621,15 @@ namespace DubinsPathsTutorial
             (Circle first_avoidance_circle, Line first_tangent_line) = FirstAvoidanceCircle(startCenter, goalCenter, pathDataList.tangent1, pathDataList.tangent2, 
                                                                 ExecuteShips, return_radius, threaten_radius, pathDataList.pathType.ToString());
 
+            if (first_avoidance_circle.center.X == goalCenter.X && first_avoidance_circle.center.Y == goalCenter.Z)
+            {
+                List<Tuple<Circle, char>> all_return_circles = new List<Tuple<Circle, char>>();
+                all_return_circles.Add(new Tuple<Circle, char>(new Circle(new PointF(startCenter.X, startCenter.Z), return_radius), pathDataList.pathType.ToString()[0]));
+                all_return_circles.Add(new Tuple<Circle, char>(new Circle(new PointF(goalCenter.X, goalCenter.Z), return_radius), pathDataList.pathType.ToString()[2]));
+                List<List<Tuple<Circle, char>>> list_only_return_circles = new List<List<Tuple<Circle, char>>>();
+                list_only_return_circles.Add(all_return_circles);
+                return list_only_return_circles;
+            }
             string first_avoid_to_goal_dubin_type = "";
             switch(pathDataList.pathType.ToString())
             {
