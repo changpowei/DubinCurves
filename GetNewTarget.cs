@@ -8,14 +8,14 @@ namespace DubinsPathsTutorial
 {
     public static class GetNewTarget
     {
-        public static List<(PointF center, PointF cutpoint, char direction)> NewGoalPos(List<Tuple<Vector3, char>> InitialDiamondCircle, List<Vector3> DetectedShips, float return_radius=7.225f)
+        public static List<(PointF center, PointF cutpoint, char direction, float goalHeading, int push_circle_Index)> NewGoalPos(List<Tuple<Vector3, char>> InitialDiamondCircle, List<Vector3> DetectedShips, float return_radius=7.225f)
         {
             
             
-            List<(PointF center, PointF cutpoint, char direction)> NewgoalPos = new List<(PointF center, PointF cutpoint, char direction)>();
+            List<(PointF center, PointF cutpoint, char direction, float goalHeading, int push_circle_Index)> NewgoalPos = new List<(PointF center, PointF cutpoint, char direction, float goalHeading, int push_circle_Index)>();
 
-            (PointF center, PointF cutpoint, char direction) ori_left_return = GetFinalGoalCircle(InitialDiamondCircle, DetectedShips, return_radius, turn_side:'L');
-            (PointF center, PointF cutpoint, char direction) ori_right_return = GetFinalGoalCircle(InitialDiamondCircle, DetectedShips, return_radius, turn_side:'R');
+            (PointF center, PointF cutpoint, char direction, float goalHeading, int push_circle_Index) ori_left_return = GetFinalGoalCircle(InitialDiamondCircle, DetectedShips, return_radius, turn_side:'L');
+            (PointF center, PointF cutpoint, char direction, float goalHeading, int push_circle_Index) ori_right_return = GetFinalGoalCircle(InitialDiamondCircle, DetectedShips, return_radius, turn_side:'R');
 
             NewgoalPos.Add(ori_left_return);
             NewgoalPos.Add(ori_right_return);
@@ -53,7 +53,7 @@ namespace DubinsPathsTutorial
             return ori_center;
         }
 
-        public static (PointF center, PointF cutpoint, char direction) GetFinalGoalCircle(List<Tuple<Vector3, char>> InitialDiamondCircle, List<Vector3> DetectedShips, float return_radius=7.225f, char turn_side = 'L')
+        public static (PointF center, PointF cutpoint, char direction, float goalHeading, int push_circle_Index) GetFinalGoalCircle(List<Tuple<Vector3, char>> InitialDiamondCircle, List<Vector3> DetectedShips, float return_radius=7.225f, char turn_side = 'L')
         {
             
             int push_circle_Index = 0;
@@ -64,8 +64,10 @@ namespace DubinsPathsTutorial
                 MathFunction.Circle next_target_circle = new MathFunction.Circle(new PointF(x:InitialDiamondCircle[push_circle_Index+1].Item1.X, y:InitialDiamondCircle[push_circle_Index+1].Item1.Z), return_radius);
                 MathFunction.Line tangent_line = MathFunction.ChooseTangentLine(current_target_circle, next_target_circle, dubin_type);
 
-                Vector2 target_cruise_vec = Vector2.Normalize(new Vector2(x:InitialDiamondCircle[push_circle_Index+1].Item1.X-InitialDiamondCircle[push_circle_Index].Item1.X,
-                                                                        y:InitialDiamondCircle[push_circle_Index+1].Item1.Z-InitialDiamondCircle[push_circle_Index].Item1.Z));
+                Vector2 target_cruise_vec = Vector2.Normalize(new Vector2(x:tangent_line.PointB.X - tangent_line.PointA.X,
+                                                                        y:tangent_line.PointB.Y - tangent_line.PointA.Y));
+                // Vector2 target_cruise_vec = Vector2.Normalize(new Vector2(x:InitialDiamondCircle[push_circle_Index+1].Item1.X-InitialDiamondCircle[push_circle_Index].Item1.X,
+                //                                                         y:InitialDiamondCircle[push_circle_Index+1].Item1.Z-InitialDiamondCircle[push_circle_Index].Item1.Z));
                 Vector2 left_normal_vec = new Vector2(-target_cruise_vec.Y, target_cruise_vec.X);
                 Vector2 right_normal_vec = new Vector2(target_cruise_vec.Y, -target_cruise_vec.X);
 
@@ -105,7 +107,9 @@ namespace DubinsPathsTutorial
                         new_cut_point = new PointF(x:new_goal_center.X + return_radius * left_normal_vec.X,
                                                         y:new_goal_center.Y + return_radius * left_normal_vec.Y);                        
                     }
-                    return ori_return = (new_goal_center, new_cut_point, turn_side);
+                    float heading_angle = -(180 * MathF.Atan2(target_cruise_vec.Y, target_cruise_vec.X) / MathF.PI - 90) * (MathF.PI / 180);
+                    // float heading_angle = -MathF.Atan2(target_cruise_vec.Y, target_cruise_vec.X) + (MathF.PI/2);
+                    return (new_goal_center, new_cut_point, turn_side, heading_angle, push_circle_Index);
                     
                 }
                 else if(push_circle_Index < InitialDiamondCircle.Count)
